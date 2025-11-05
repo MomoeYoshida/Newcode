@@ -1,0 +1,44 @@
+#!/bin/csh
+
+# Common usage:
+# compile6 -Matlab5 -O -DMatlab_Callback -DClock_Enable -DSmth_Clock_Enable -DPrint_Memory -DClock_AvoidOffset state6_3.c corr_land.c
+
+# Linux usage:
+# compile6 -Matlab5 -O -DMatlab_Callback -DPrint_Memory -DClock_AvoidOffset state6_3.c corr_land.c
+
+module load matlab/2024a
+module load gcc/10.3.0
+
+if ($#argv < 2) then
+  echo This is a compiler for ms_cc6_corr
+  echo "Usage: compile [-flags] state_def_file.c field_statistics_file.c [other_files]"
+  echo "   Use flag -g to compile for Matlab debugging"
+  echo "   Use flag -O to optimize compile"
+  echo "   Use flag -Matlab5 to compile under Matlab 5.x"
+  echo
+  echo "   ex. compile -O -Matlab5 bound_state3.c corr_land.c"
+else
+  set flags
+  set files
+  set mexname = cmex
+  foreach temp ($argv[1-]:q)
+    switch ($temp)
+      case -Matlab5:
+             set mexname = /sw/matlab/R2024a/bin/mex 
+             set flags = ($flags:q -DMatlab5)
+             breaksw
+      case -*:
+             set flags = ($flags:q $temp)
+             breaksw
+      default:
+             set files = ($files:q $temp:q)
+             breaksw
+    endsw
+  end
+  if ($OSTYPE == solaris) then
+    $mexname -DSimple_State -DInterface=61 -DPrior_Supplied -I$ms_home/Prog/Misc -I$ms_home/MS/StateCorr -I$ms_home/MS/Smoother $flags:q ~/MS/Smoother/ms_cc6_corr.c ovlp_data.c ~/MS/Smoother/smth.c ~/MS/Smoother/smth_mem.c ~/MS/Smoother/smth_debug_func.c ~/Prog/Misc/clock.c $files -lposix4
+  else
+    echo "Dollar-ms_home is: " $ms_home
+    $mexname -UClock_Enable -USmth_Clock_Enable -UClock_AvoidOffset -DSimple_State -DInterface=61 -DPrior_Supplied -I$ms_home/Prog/Misc -I$ms_home/MS/StateCorr -I$ms_home/MS/Smoother $flags:q $ms_home/MS/Smoother/ms_cc6_corr.c ovlp_data.c $ms_home/MS/Smoother/smth.c $ms_home/MS/Smoother/smth_mem.c $ms_home/MS/Smoother/smth_debug_func.c $ms_home/MS/Smoother/clock.c $files
+  endif
+endif

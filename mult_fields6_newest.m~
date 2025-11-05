@@ -1,0 +1,256 @@
+%
+% do a multi-plane / multi-measurement example
+%
+% sc - number of scales on tree
+%
+% st_dense - global rescaling of density of states; typically 1
+%            (>1 - denser states, <1 - sparser states)
+%
+% nf - number of unknown fields
+%
+% sti - statistic type (see corr_land)
+% ss  - state sampling 
+%       scalar     - number of pix between samples
+%       2 vect     - number of pix: vert, horz
+%       3 vect     - number of pix: vert, horz, and averaging sep.
+%       row vect   - number of pix vs. scale (coarse to fine)
+%       3xn matrix - number of pix vs. scale (outer, inner, averaging)
+%       6xn matrix - number of pix vs. scale (vert:o,i,a horz:o,i,a)
+% corr_parm - parameters are a function of sti
+% sdv - std dev (scalar or matrix) for field i
+%
+% nw - number of weight planes
+% wi - weight plane i
+%
+% mm - measurement model:  one row per measurement; one column per unknown
+%      Entry:  0 - no dependence between measurement and unknown
+%              1 - unit dependence between measurement and unknown
+%             -i - dependence given by weight plane i
+%
+% mi - measurement plane i
+% ri - measurement error variance plane i (negative value for no measurement)
+%
+% regions - integer matrix of ocean bodies; 0=land
+% distances - matrix of distance details (only if compiler option set)
+% adjacency array
+%
+% options: vector of length 1-4 (or 4xn, 6xn matrix for prior computation)
+%   (1)   - +1: First run, or problem structure has changed (choose this!)
+%           -1: Successive runs with same problem structure
+%   (2)   - +1: Don't run debugger
+%           -1: Debug at start
+%   (3)   - +1: Don't generate posterior sample, just estimate
+%           -1: Get posterior sample
+%   (4)   - +1: Use interface 6
+%           -n: Use interface 7 with detail scale n
+%
+% Return Values:
+%   Without posterior sampling  [x1,ps1,p1,x2,ps2,p2 ...]
+%   With posterior sampling     [x1,p1,x2,p2 ...]
+%
+% xi - estimates for field i
+% (posterior samples for field i, if requested)
+% pi - error variances for field i
+%
+
+function [r1,r2,r3,r4,r5,r6] = mult_fields6_newest( sc, st_dense, varargin );
+
+% Get parameter positions
+i_nf = 1;
+num_fields = eval(['varargin{' num2str(i_nf) '}(1)']);
+i_nw = i_nf+1+4*num_fields;
+i_mm = i_nw+1+eval(['varargin{' num2str(i_nw) '}']);
+meas = varargin{i_mm};
+num_meas = size(varargin{i_mm},1);
+i_re = i_mm+1+2*num_meas;
+eval(['opts = varargin{' num2str(i_re+2) '};']);
+meas_siz = eval(['size(varargin{' num2str(i_mm+1) '})']);
+
+eval(['opts = varargin{' num2str(nargin-2) '};']);
+if (size(opts,1)<=1),
+  opts = [opts 1 1 1 1 1];
+end;
+
+%  Would think this should be eval(['size(varargin{' num2str(i_mm) '})']))
+if (num_fields ~= size(eval(['varargin{' num2str(i_mm) '}']),2)),
+  error( 'Inconsistent # fields and measurement matrix columns.' );
+end;
+if (num_meas<1),
+  error( 'Must have at least one set of measurements.' );
+end;
+if (varargin{i_nw}<max(max(-meas))),
+  error( 'More weight planes referenced than supplied.' );
+end;
+
+meas_siz = eval(['size(varargin{' num2str(i_mm+1) '})']);
+ov = compute_overlap( sc, 2, 2, meas_siz(2), meas_siz(1), 2 );
+for m=1:num_meas,
+if sum(abs(meas_siz-eval(['size(varargin{' num2str(i_mm+m) '})'])))>0.5,
+    error( 'All measurement planes must be of the same size.' );
+  end;
+eval(['size_xx=size(varargin{' num2str(i_mm+num_meas+m) '})']);
+mystr=['i_mm=' num2str(i_mm) ', num_meas=' num2str(num_meas) ', m=' num2str(m) ', size(varargin{' num2str(i_mm+num_meas+m) '})=' num2str(size_xx) ];
+if sum(abs(meas_siz-eval(['size(varargin{' num2str(i_mm+num_meas+m) '})'])))>0.5,
+    error( [mystr 'Measurement error variance planes must have the same size as measurements. /MS/Newcode'] );
+  end;
+
+eval(['varargin{' num2str(i_mm+m) '} = dense_to_overlap( varargin{' num2str(i_mm+m) '}, ov, 2, 2 );']);
+eval(['varargin{' num2str(i_mm+num_meas+m) '} = dense_to_overlap( varargin{' num2str(i_mm+num_meas+m) '} .* sum_to_dense( dense_to_overlap( ones(size(varargin{' num2str(i_mm+num_meas+m) '})), ov, 2, 2 ), ov, 2, 2 ), ov, 2, 2 );']);
+
+eval(['varargin{' num2str(i_mm+m) '} = varargin{' num2str(i_mm+m) '}(:)'';']);
+eval(['varargin{' num2str(i_mm+num_meas+m) '} = varargin{' num2str(i_mm+num_meas+m) '}(:)'';']);
+end;
+for m=1:(eval(['varargin{' num2str(i_nw) '}'])),
+eval(['varargin{' num2str(i_nw+m) '} = dense_to_overlap( varargin{' num2str(i_nw+m) '}, ov, 2, 2 );']);
+end;
+
+meas_siz = eval(['size(varargin{' num2str(i_mm+1) '})']);
+c = zeros(num_fields*num_meas,prod(meas_siz));
+yd = zeros(1,prod(meas_siz));
+obs = zeros(num_meas,prod(meas_siz));
+cov = -ones(num_meas,prod(meas_siz));
+
+for m=1:num_meas,
+a = find(eval(['varargin{' num2str(i_mm+num_meas+m) '}'])>0);
+  yd(a) = yd(a)+1;
+end;
+
+ydt = zeros(1,prod(meas_siz));
+for m=1:num_meas,
+a = find(eval(['varargin{' num2str(i_mm+num_meas+m) '}'])>0);
+  for n=1:num_fields,
+    if (meas(m,n) >= 0),
+      c(1+(n-1)*yd(a)+ydt(a)+(a-1)*num_fields*num_meas) = meas(m,n);
+    else,
+c(1+(n-1)*yd(a)+ydt(a)+(a-1)*num_fields*num_meas) = eval(['varargin{' num2str(i_nw-round(meas(m,n))) '}(a)']);
+    end;
+  end;
+  ydt(a) = ydt(a)+1;
+obs((a-1)*num_meas+ydt(a)) = eval(['varargin{' num2str(i_mm+m) '}(a)']);
+cov((a-1)*num_meas+ydt(a)) = eval(['varargin{' num2str(i_mm+num_meas+m) '}(a)']);
+end;
+
+%
+% Opening part of command
+%
+comstr = ['[xf,pf]'];
+if (opts(3)<0), comstr = ['[xf,xs,pf]']; end;
+if (opts(4)>0),
+  comstr = [comstr '= ms_cc6_corr( '];
+else,
+  comstr = [comstr '= ms_cc7_corr( '];
+end;
+comstr = [comstr 'sc, 2, 2, ov, yd, c, obs, cov, [1 opts(1:3)]'];
+
+%
+% State description - number of fields, plus density parameters
+%
+if (opts(4)>0),
+  % Interface 6
+comstr = [comstr ', varargin{' num2str(i_nf) '}, '];
+for i=1:num_fields,
+eval(['stcl = varargin{' num2str(i_nf+i*4-2) '};']);
+  if (size(stcl,1)==1),
+    if length(stcl)<1.5,
+      % Plain state sampling, isotropic
+      stcl = [stcl*ones(2,sc)/(st_dense); 1*ones(1,sc)];
+    elseif length(stcl)<4,
+      % Different x,y sampling
+      stcl = [stcl(:) ; 1];
+      stcl = [stcl(1)*ones(2,sc)/(st_dense); stcl(3)*ones(1,sc); stcl(2)*ones(2,sc)/(st_dense); stcl(3)*ones(1,sc)];
+    else,
+      % Custom sampling by scale
+      stcl = stcl/(st_dense);
+    end;
+  else,
+    % Custom sampling
+    stcl = stcl/st_dense;
+  end;
+  eval( ['stcl' int2str(i) ' = stcl;'] );
+  comstr = [comstr 'stcl' int2str(i) ', '];
+end;
+else,
+  % Interface 7
+if (opts(5)<0),
+comstr = [comstr ', varargin{' num2str(i_nf) '}, -opts(4), -opts(5), '];
+else
+comstr = [comstr ', varargin{' num2str(i_nf) '}, -opts(4), '];
+end;
+comstr = [comstr '['];
+for i=1:num_fields,
+comstr = [comstr 'varargin{' num2str(i_nf+i*4-1) '} '];
+end;
+comstr = [comstr '],'];
+if (eval(['size(varargin{' num2str(i_nf+1*4-2) '},1)'])==5),
+% user has supplied details for interface 7
+comstr = [comstr 'varargin{' num2str(i_nf+i*4-2) '}(1,:), varargin{' num2str(i_nf+i*4-2) '}(2,:), varargin{' num2str(i_nf+i*4-2) '}(3:5,:),'];
+else,
+% take as standard parameters for interface 6 and translate
+comstr = [comstr '['];
+for i=1:num_fields,
+comstr = [comstr 'st_dense * varargin{' num2str(i_nf+i*4-1) '}/ varargin{' num2str(i_nf+i*4-2) '}(1) '];
+end;
+comstr = [comstr '],['];
+for i=1:num_fields,
+if (eval(['size(varargin{' num2str(i_nf+i*4-2) '},1)'])) > 2.5,
+comstr = [comstr 'varargin{' num2str(i_nf+i*4-2) '}(1) / varargin{' num2str(i_nf+i*4-2) '}(3) '];
+  else
+    comstr = [comstr '1 '];
+  end;
+end;
+if (opts(5)<0),
+comstr = [comstr '], '];
+else,
+comstr = [comstr '], [], '];
+end;
+end;
+end;
+
+% 
+% Statistics description
+%
+comstr = [comstr '['];
+for i=1:num_fields,
+comstr = [comstr 'varargin{' num2str(i_nf+i*4-3) '} '];
+end;
+comstr = [comstr '], varargin{' num2str(i_re) '}, '];
+
+if eval(['(size(varargin{' num2str(i_re) '}) == size(varargin{' num2str(i_re+1) '}))']),
+comstr = [comstr 'varargin{' num2str(i_re+1) '}, varargin{' num2str(i_re+2) '}, num_fields '];
+else,
+comstr = [comstr 'varargin{' num2str(i_re+1) '}, num_fields '];
+end;
+for i=1:num_fields,
+comstr = [comstr ', varargin{' num2str(i_nf+i*4) '}'];
+end;
+for i=1:num_fields,
+comstr = [comstr ', varargin{' num2str(i_nf+i*4-1) '}'];
+end;
+comstr = [comstr ');'];
+
+%comstr
+%eval('[xf,pf]= ms_cc6_corr( sc, 2, 2, ov, yd, c, obs, cov, [7 0 7 0 ; 7 0 7 1 ; 7 0 7 2]'',x1, [stcl*ones(2,sc)/(st_dense); 1*ones(1,sc)], x2, x10, x11, num_fields , x5, x4);');
+
+%keyboard
+eval(comstr);
+%keyboard
+
+siz = 2.^(sc-1);
+j=0;
+for i=1:num_fields,
+  if (nargout>j),
+    j=j+1;
+    eval(['r' num2str(j) ' = reshape( xf(i:num_fields:end), siz, siz );']);
+    eval(['r' num2str(j) ' = overlap_to_dense( r' num2str(j) ', ov, 2, 2 );']);
+  end;
+  if (nargout>j & opts(3)<0),
+    j=j+1;
+    eval(['r' num2str(j) ' = reshape( xs(i:num_fields:end), siz, siz );']);
+    eval(['r' num2str(j) ' = overlap_to_dense( r' num2str(j) ', ov, 2, 2 );']);
+  end;
+  if (nargout>(i-1)*2+1),
+    j=j+1;
+    eval(['r' num2str(j) ' = reshape( pf(((i-1)*(num_fields+1)+1):num_fields*num_fields:end), siz, siz );']);
+    eval(['r' num2str(j) ' = overlap_to_dense( r' num2str(j) ', ov, 2, 2 );']);
+  end;
+end;

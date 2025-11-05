@@ -1,0 +1,10 @@
+
+void mexGetFull(char *name, int *m, int *n, double *pr, double *pi) {
+  mxArray *array_ptr;
+
+  array_ptr = mexGetVariable("caller", name);
+  *m = mxGetM(array_ptr);
+  *n = mxGetN(array_ptr);
+  pr = mxGetPr(array_ptr);
+  pi = mxGetPi(array_ptr);
+}

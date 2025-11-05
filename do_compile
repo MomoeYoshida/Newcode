@@ -1,0 +1,2 @@
+export ms_home=/home/heronlab/momoe/geo_polar_blended_sst/Linux_JCUHPC/blended_home
+./compile6 -Matlab5 -O -DLong_Long -DMatlab_Callback -DSmth_Debug_Error -DCorrFn_Region -DPrint_Memory -DClock_AvoidOffset -DPrior_Inverted state6_4.c corr_land.c
