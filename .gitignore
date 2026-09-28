@@ -1,0 +1,27 @@
+# Compiled MATLAB MEX files
+*.mexa64
+*.mex*
+
+# Compiled C objects and libraries
+*.o
+*.so
+
+# MATLAB and editor temporary files
+*.asv
+*.m~
+*~
+*.swp
+*.swo
+
+# macOS metadata
+.DS_Store
+
+# Xcode user-specific files
+xcuserdata/
+*.xcuserstate
+
+# Debugging output
+core
+core.*
+vgcore.*
+*.log
