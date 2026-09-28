@@ -5,9 +5,9 @@
 
 # Linux usage:
 # compile6 -Matlab5 -O -DMatlab_Callback -DPrint_Memory -DClock_AvoidOffset state6_3.c corr_land.c
-
+module purge
 module load matlab/2024a
-module load gcc/10.3.0
+#module load gcc/10.3.0
 
 if ($#argv < 2) then
   echo This is a compiler for ms_cc6_corr
@@ -24,7 +24,7 @@ else
   foreach temp ($argv[1-]:q)
     switch ($temp)
       case -Matlab5:
-             set mexname = /sw/matlab/R2024a/bin/mex 
+             set mexname = /gpfs01/sw/matlab/R2024a/bin/mex 
              set flags = ($flags:q -DMatlab5)
              breaksw
       case -*:
