@@ -37,7 +37,7 @@ else
   end
   if ($OSTYPE == solaris) then
     $mexname -DSimple_State -DInterface=61 -DPrior_Supplied -I$ms_home/Prog/Misc -I$ms_home/MS/StateCorr -I$ms_home/MS/Smoother $flags:q ~/MS/Smoother/ms_cc6_corr.c ovlp_data.c ~/MS/Smoother/smth.c ~/MS/Smoother/smth_mem.c ~/MS/Smoother/smth_debug_func.c ~/Prog/Misc/clock.c $files -lposix4
-  else
+  else # Linux; JCUHPC
     echo "Dollar-ms_home is: " $ms_home
     $mexname -UClock_Enable -USmth_Clock_Enable -UClock_AvoidOffset -DSimple_State -DInterface=61 -DPrior_Supplied -I$ms_home/Prog/Misc -I$ms_home/MS/StateCorr -I$ms_home/MS/Smoother $flags:q $ms_home/MS/Smoother/ms_cc6_corr.c ovlp_data.c $ms_home/MS/Smoother/smth.c $ms_home/MS/Smoother/smth_mem.c $ms_home/MS/Smoother/smth_debug_func.c $ms_home/MS/Smoother/clock.c $files
   endif
