@@ -255,11 +255,11 @@ void state_gen( int wx, int wy, int numels, int numeig, double evallim, double s
   for (ind=0,i=0;i<numeig;i++) {
     if ((l = (int)pl[i]) > 0) {
       /* have a state - allocate and copy */
-      statedef[wx][wy][numels][i] = pf_mxCalloc( 1, sizeof(state) );
+      statedef[wx][wy][numels][i] = mxCalloc( 1, sizeof(state) );
       statedef[wx][wy][numels][i]->len = l;
-      statedef[wx][wy][numels][i]->dx = pf_mxCalloc( l, sizeof(int) );
-      statedef[wx][wy][numels][i]->dy = pf_mxCalloc( l, sizeof(int) );
-      statedef[wx][wy][numels][i]->statevals = pf_mxCalloc( l, sizeof(double) );
+      statedef[wx][wy][numels][i]->dx = mxCalloc( l, sizeof(int) );
+      statedef[wx][wy][numels][i]->dy = mxCalloc( l, sizeof(int) );
+      statedef[wx][wy][numels][i]->statevals = mxCalloc( l, sizeof(double) );
 
       for (j=0;j<l;j++) {
 	statedef[wx][wy][numels][i]->dx[j] = (int) px[ind];
